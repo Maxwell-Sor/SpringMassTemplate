@@ -197,6 +197,10 @@ PrefabInstance:
       value: BlueCube
       objectReference: {fileID: 0}
     - target: {fileID: 3040591912450516665, guid: b43189b261145aa49b37f0b57eaf5bef, type: 3}
+      propertyPath: useGravity
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3040591912450516665, guid: b43189b261145aa49b37f0b57eaf5bef, type: 3}
       propertyPath: groundPlane
       value: 
       objectReference: {fileID: 10877457}
@@ -210,7 +214,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6988472050468893402, guid: b43189b261145aa49b37f0b57eaf5bef, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: 3.4
       objectReference: {fileID: 0}
     - target: {fileID: 6988472050468893402, guid: b43189b261145aa49b37f0b57eaf5bef, type: 3}
       propertyPath: m_LocalPosition.z
