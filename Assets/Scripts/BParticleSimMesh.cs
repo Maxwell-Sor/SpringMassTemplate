@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 // Check this out we can require components be on a game object!
 [RequireComponent(typeof(MeshFilter))]
@@ -57,11 +58,23 @@ public class BParticleSimMesh : MonoBehaviour
      * - particle mass (float)
      * - useGravity flag (bool)
      * - gravity value (Vector3)
+
      * Here you need to privately provide the:
      * - Mesh (Mesh)
      * - array of particles (BParticle[])
      * - the plane (BPlane)
      ***/
+
+    public Transform groundPlane;
+    public bool handlePlaneCollisions;
+    public float particleMass;
+    public bool useGravity;
+    public Vector3 gravity;
+
+    Mesh mesh;
+    BParticle[] particles;
+    BPlane plane;
+    int[] vertexToParticleMap;
 
 
 
@@ -81,7 +94,9 @@ public class BParticleSimMesh : MonoBehaviour
     /// </summary>
     void Start()
     {
-
+        mesh = GetComponent<MeshFilter>().mesh;
+        InitParticles();
+        InitPlane();
     }
 
 
@@ -94,14 +109,138 @@ public class BParticleSimMesh : MonoBehaviour
      * ...
      ***/
 
+    public void InitParticles()
+    {
+        /*Debug.Log("START");
+        Debug.Log(mesh.vertices.Length);
+        foreach(Vector3 pos in mesh.vertices){
+            Debug.Log(pos);
+        }
+        Debug.Log(mesh.vertices);
+        */
 
+
+        BParticle newParticle; 
+        Vector3 worldVertexPos;
+        BSpring newSpring;
+        List<BSpring> particleSprings;
+
+        Vector3[] uniqueVertices = mesh.vertices.Distinct().ToArray();
+        particles = new BParticle[uniqueVertices.Length];
+        vertexToParticleMap = mapVertices(mesh.vertices, uniqueVertices);
+
+
+        foreach(int i in vertexToParticleMap){
+            Debug.Log(i);
+        }
+
+        for(int i = 0; i < uniqueVertices.Length; i++)
+        {
+            worldVertexPos = transform.TransformPoint(uniqueVertices[i]);
+            particleSprings = new List<BSpring>();
+            
+            for (int p = 0; p < i; p++)
+            {
+                newSpring = new BSpring()
+                {
+                    kd = defaultSpringKD,
+                    ks = defaultSpringKS,
+                    restLength = Vector3.Distance(worldVertexPos, particles[p].position),
+                    attachedParticle = p
+                };
+                
+                particleSprings.Add(newSpring);
+                //Debug.Log("Particle: " + i + ", Attached to Particle: " + newSpring.attachedParticle + ", Rest Length: " + newSpring.restLength);
+            }
+
+            newParticle = new BParticle()
+            {
+                position = worldVertexPos,
+                velocity = Vector3.zero,
+                mass = particleMass,
+                attachedToContact = false,
+                attachedSprings = particleSprings
+            }; 
+
+            particles[i] = newParticle;
+        }
+    }
+
+    public int[] mapVertices(Vector3[] vertices, Vector3[] uniqueVertices)
+    {
+        int[] map = new int[vertices.Length];
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            for (int j = 0; j < uniqueVertices.Length; j++)
+            {
+                if (vertices[i] == uniqueVertices[j])
+                {
+                    map[i] = j; // Map original index 'i' to particle index 'j'
+                    break;
+                }
+            }
+        }
+        return map;
+    }
+
+    public void InitPlane()
+    {
+        plane = new BPlane
+        {
+            position = groundPlane.position,
+            normal = groundPlane.up
+        };
+
+        //Debug.Log("Position: " + plane.position + ", Normal: " + plane.normal);
+    }
+
+    
+
+    public void FixedUpdate()
+    {
+        /*Vector3 forces;
+        Vector3 acceleration;
+        BParticle particle;
+
+        Vector3 newPosition;
+        Vector3 newVelocity;
+
+        float fixedDeltaTime = Time.fixedDeltaTime;
+
+        Debug.Log(fixedDeltaTime);*/
+
+        for (int i = 0; i < particles.Length; i++){
+            BParticle particle = particles[i];
+            /*forces = CalculateForces(particle);
+            acceleration = forces / particleMass * fixedDeltaTime;
+
+            newVelocity = particle.velocity + acceleration;
+            newPosition = particle.position + newVelocity;
+
+            particle.velocity = newVelocity;
+            particle.position = newPosition;
+
+            Debug.Log("Forces: " + forces + ", Acceleration: " + acceleration + ", velocity: " + particle.velocity + ", pos: " + particle.position);
+            */
+            particle.position = new Vector3(0f, 1f, 0f);
+            //Debug.Log(particle.position);
+        }
+
+    }
+
+    public Vector3 CalculateForces(BParticle particle)
+    {
+        return gravity * particleMass;
+    }
 
     /// <summary>
     /// Draw a frame with some helper debug render code
     /// </summary>
     public void Update()
     {
-        /* This will work if you have a correctly made particles array
+        UpdateMesh();
+        //This will work if you have a correctly made particles array
+        /*
         if (debugRender)
         {
             int particleCount = particles.Length;
@@ -117,5 +256,42 @@ public class BParticleSimMesh : MonoBehaviour
             }
         }
         */
+    
+    }
+
+    public void UpdateMesh()
+    {
+        /*
+        right down far
+        left down far
+        right up far
+        left up far
+        right up near
+        left up near
+        right down near
+        left down near
+
+        right up far
+        left up far
+        right up near
+        left up near
+        right down near
+        right down far
+        left down far
+        left down near
+        */
+
+        Vector3[] currentMeshVertices = new Vector3[mesh.vertices.Length];
+
+        for (int i = 0; i < currentMeshVertices.Length; i++)
+        {
+            int particleIndex = vertexToParticleMap[i];
+            currentMeshVertices[i] = particles[particleIndex].position;
+        }
+
+        mesh.vertices = currentMeshVertices;
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
     }
 }
