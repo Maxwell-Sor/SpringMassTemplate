@@ -72,8 +72,8 @@ public class BParticleSimMesh : MonoBehaviour
     public Vector3 gravity;
 
     Mesh mesh;
-    BParticle[] particles;
     BPlane plane;
+    BParticle[] particles;
     int[] vertexToParticleMap;
 
 
@@ -99,223 +99,15 @@ public class BParticleSimMesh : MonoBehaviour
         InitPlane();
     }
 
-
-
-    /*** BIG HINT: My solution code has as least the following functions
-     * InitParticles()
-     * InitPlane()
-     * UpdateMesh() (remember the hint above regarding global and local coords)
-     * ResetParticleForces()
-     * ...
-     ***/
-
-    public void InitParticles()
+    void FixedUpdate()
     {
-        /*Debug.Log("START");
-        Debug.Log(mesh.vertices.Length);
-        foreach(Vector3 pos in mesh.vertices){
-            Debug.Log(pos);
-        }
-        Debug.Log(mesh.vertices);
-        */
-
-
-        BParticle newParticle; 
-        Vector3 worldVertexPos;
-        BSpring newSpring;
-        List<BSpring> particleSprings;
-
-        Vector3[] uniqueVertices = mesh.vertices.Distinct().ToArray();
-        particles = new BParticle[uniqueVertices.Length];
-        vertexToParticleMap = mapVertices(mesh.vertices, uniqueVertices);
-
-
-        /*foreach(int i in vertexToParticleMap){
-            Debug.Log(i);
-        }*/
-
-        for(int i = 0; i < uniqueVertices.Length; i++)
+        if(handlePlaneCollisions)
         {
-            worldVertexPos = transform.TransformPoint(uniqueVertices[i]);
-            particleSprings = new List<BSpring>();
-            
-            for (int p = 0; p < i; p++)
-            {
-                newSpring = new BSpring()
-                {
-                    kd = defaultSpringKD,
-                    ks = defaultSpringKS,
-                    restLength = Vector3.Distance(worldVertexPos, particles[p].position),
-                    attachedParticle = p
-                };
-                
-                particleSprings.Add(newSpring);
-                //Debug.Log("Particle: " + i + ", Attached to Particle: " + newSpring.attachedParticle + ", Rest Length: " + newSpring.restLength);
-            }
-
-            newParticle = new BParticle()
-            {
-                position = worldVertexPos,
-                velocity = Vector3.zero,
-                mass = particleMass,
-                attachedToContact = false,
-                attachedSprings = particleSprings
-            }; 
-
-            particles[i] = newParticle;
+            HandleCollision();
         }
-    }
-
-    public int[] mapVertices(Vector3[] vertices, Vector3[] uniqueVertices)
-    {
-        int[] map = new int[vertices.Length];
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            for (int j = 0; j < uniqueVertices.Length; j++)
-            {
-                if (vertices[i] == uniqueVertices[j])
-                {
-                    map[i] = j; // Map original index 'i' to particle index 'j'
-                    break;
-                }
-            }
-        }
-        return map;
-    }
-
-    public void InitPlane()
-    {
-        plane = new BPlane
-        {
-            position = groundPlane.position,
-            normal = groundPlane.up
-        };
-
-        //Debug.Log("Position: " + plane.position + ", Normal: " + plane.normal);
-    }
-
-    private Vector3 counter;
-
-    public void FixedUpdate()
-    {
-        Vector3 forces;
-        Vector3 acceleration;
-        BParticle particle;
-
-        Vector3 newPosition;
-        Vector3 newVelocity;
-        Vector3 contactPoint;
-
-        bool penetration;
-
-        float fixedDeltaTime = Time.fixedDeltaTime;
-
-
-
-
-        for (int i = 0; i < particles.Length; i++)
-        {
-            //particles[i].contactSpring;
-            //particles[i].attachedToContact;
-
-            penetration = Penetration(particles[i]);
-
-            if (penetration && !particles[i].attachedToContact)
-            {
-                //attach to contact
-                particles[i].attachedToContact = true;
-
-                //find closest point
-                Vector3 difference = particles[i].position - plane.position;
-                float distance = Vector3.Dot(difference, plane.normal);
-                Vector3 nearPoint = particles[i].position - (distance * plane.normal);
-
-                BContactSpring contactSpring = new BContactSpring()
-                {
-                    kd = contactSpringKD,
-                    ks = contactSpringKS,
-                    restLength = 0,
-                    attachPoint = nearPoint
-                };
-
-                particles[i].contactSpring = contactSpring;
-
-                Debug.Log("Attach point: " + nearPoint);
-
-            } else if (!penetration && particles[i].attachedToContact)
-            {
-                //remove contact
-                particles[i].attachedToContact = false;
-            }
-        }
-
         AddForces();
+        UpdateParticles();
 
-        for (int i = 0; i < particles.Length; i++)
-        {
-            acceleration = particles[i].currentForces / particles[i].mass * fixedDeltaTime;
-
-            particles[i].velocity += acceleration;
-            particles[i].position += particles[i].velocity * fixedDeltaTime;
-
-        }
-
-    }
-
-    public bool Penetration(BParticle particle)
-    {
-        if (Vector3.Dot(particle.position - plane.position, plane.normal) < 0)
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    public void AddForces()
-    {
-        
-        BContactSpring contactSpring;
-
-        Vector3 gravityForce;
-        Vector3 contactSpringForce;
-        Vector3 springForce;
-
-        for (int i = 0; i < particles.Length; i++)
-        {
-            particles[i].currentForces = Vector3.zero;
-        }
-
-
-        for (int i = 0; i < particles.Length; i++)
-        {
-            if(useGravity)
-            {
-                gravityForce = gravity * particles[i].mass;
-                particles[i].currentForces += gravityForce;
-            }
-
-            contactSpring = particles[i].contactSpring;
-            if (particles[i].attachedToContact)
-            {
-                Vector3 difference = particles[i].position - contactSpring.attachPoint;
-                contactSpringForce = - contactSpring.ks * Vector3.Dot(difference, plane.normal) * plane.normal - (contactSpring.kd * particles[i].velocity);
-                particles[i].currentForces += contactSpringForce;
-            }
-
-            foreach (BSpring spring in particles[i].attachedSprings)
-            {
-                int other = spring.attachedParticle;
-                Vector3 difference = particles[i].position - particles[other].position;
-                Vector3 normalDifference = difference / difference.magnitude;
-                Vector3 velocityDifference = particles[i].velocity - particles[other].velocity;
-                springForce = spring.ks * (spring.restLength - difference.magnitude) * normalDifference - spring.kd * Vector3.Dot(velocityDifference, normalDifference) * normalDifference;
-                
-                particles[i].currentForces += springForce;
-                particles[other].currentForces -= springForce;
-            }
-
-        }
     }
 
     /// <summary>
@@ -324,8 +116,7 @@ public class BParticleSimMesh : MonoBehaviour
     public void Update()
     {
         UpdateMesh();
-        //This will work if you have a correctly made particles array
-        /*
+
         if (debugRender)
         {
             int particleCount = particles.Length;
@@ -340,32 +131,184 @@ public class BParticleSimMesh : MonoBehaviour
                 }
             }
         }
-        */
-    
     }
 
-    public void UpdateMesh()
+
+    void InitParticles()
     {
-        /*
-        right down far
-        left down far
-        right up far
-        left up far
-        right up near
-        left up near
-        right down near
-        left down near
+        Vector3[] uniqueVertices = mesh.vertices.Distinct().ToArray();
+        particles = new BParticle[uniqueVertices.Length];
+        vertexToParticleMap = MapVertices(mesh.vertices, uniqueVertices);
 
-        right up far
-        left up far
-        right up near
-        left up near
-        right down near
-        right down far
-        left down far
-        left down near
-        */
+        for(int i = 0; i < uniqueVertices.Length; i++)
+        {
+            // Particle Position
+            Vector3 worldVertexPos = transform.TransformPoint(uniqueVertices[i]);
 
+            // Particle to Particle Springs
+            List<BSpring> particleSprings = new List<BSpring>();
+            for (int p = 0; p < i; p++)
+            {
+                BSpring newSpring = new BSpring()
+                {
+                    kd = defaultSpringKD,
+                    ks = defaultSpringKS,
+                    restLength = Vector3.Distance(worldVertexPos, particles[p].position),
+                    attachedParticle = p
+                };
+                
+                particleSprings.Add(newSpring);
+            }
+
+            // Create Particle
+            BParticle newParticle = new BParticle()
+            {
+                position = worldVertexPos,
+                velocity = Vector3.zero,
+                mass = particleMass,
+                attachedToContact = false,
+                attachedSprings = particleSprings
+            }; 
+            particles[i] = newParticle;
+        }
+    }
+
+
+    void InitPlane()
+    {
+        plane = new BPlane
+        {
+            position = groundPlane.position,
+            normal = groundPlane.up
+        };
+    }
+
+
+    int[] MapVertices(Vector3[] vertices, Vector3[] uniqueVertices)
+    {
+        int[] map = new int[vertices.Length];
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            for (int j = 0; j < uniqueVertices.Length; j++)
+            {
+                if (vertices[i] == uniqueVertices[j])
+                {
+                    map[i] = j;
+                    break;
+                }
+            }
+        }
+
+        return map;
+    }
+
+
+    public bool Penetration(BParticle particle)
+    {
+        if (Vector3.Dot(particle.position - plane.position, plane.normal) < 0)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    void HandleCollision()
+    {
+        for (int i = 0; i < particles.Length; i++)
+        {
+            bool penetration = Penetration(particles[i]);
+
+            if (penetration && !particles[i].attachedToContact)
+            {
+                // Attach to contact
+                particles[i].attachedToContact = true;
+
+                // Find closest point
+                Vector3 difference = particles[i].position - plane.position;
+                float distance = Vector3.Dot(difference, plane.normal);
+                Vector3 nearPoint = particles[i].position - (distance * plane.normal);
+
+                // Create contact spring
+                BContactSpring contactSpring = new BContactSpring()
+                {
+                    kd = contactSpringKD,
+                    ks = contactSpringKS,
+                    restLength = 0,
+                    attachPoint = nearPoint
+                };
+                particles[i].contactSpring = contactSpring;
+
+            } else if (!penetration && particles[i].attachedToContact)
+            {
+                // Remove contact
+                particles[i].attachedToContact = false;
+            }
+        }
+    }
+
+    void AddForces()
+    {
+        Vector3 gravityForce;
+        Vector3 contactSpringForce;
+        Vector3 springForce;
+
+        //Reset forces
+        for (int i = 0; i < particles.Length; i++)
+        {
+            particles[i].currentForces = Vector3.zero;
+        }
+
+
+        for (int i = 0; i < particles.Length; i++)
+        {
+            // Add gravity
+           if(useGravity)
+            {
+                gravityForce = gravity * particles[i].mass;
+
+                particles[i].currentForces += gravityForce;
+            }
+
+            // Add contact spring force
+            if (particles[i].attachedToContact)
+            {
+                BContactSpring contactSpring = particles[i].contactSpring;
+                Vector3 difference = particles[i].position - contactSpring.attachPoint;
+                contactSpringForce = (-1f * contactSpring.ks) * Vector3.Dot(difference, plane.normal) * plane.normal - (contactSpring.kd * particles[i].velocity);
+
+                particles[i].currentForces += contactSpringForce;
+            }
+
+            // Add particle to particle spring forces
+            foreach (BSpring spring in particles[i].attachedSprings)
+            {
+                int other = spring.attachedParticle;
+                Vector3 difference = particles[i].position - particles[other].position;
+                Vector3 normalDifference = difference / difference.magnitude;
+                Vector3 velocityDifference = particles[i].velocity - particles[other].velocity;
+                springForce = (spring.ks * (spring.restLength - difference.magnitude) * normalDifference) - (spring.kd * Vector3.Dot(velocityDifference, normalDifference) * normalDifference);
+                
+                particles[i].currentForces += springForce;
+                particles[other].currentForces -= springForce;
+            }
+        }
+    }
+
+    void UpdateParticles()
+    {
+        float fixedDeltaTime = Time.fixedDeltaTime;
+        for (int i = 0; i < particles.Length; i++)
+        {
+            Vector3 acceleration = particles[i].currentForces / particles[i].mass;
+
+            particles[i].velocity += acceleration * fixedDeltaTime;
+            particles[i].position += particles[i].velocity * fixedDeltaTime;
+        }
+    }
+
+    void UpdateMesh()
+    {
         Vector3[] currentMeshVertices = new Vector3[mesh.vertices.Length];
 
         for (int i = 0; i < currentMeshVertices.Length; i++)
@@ -375,7 +318,6 @@ public class BParticleSimMesh : MonoBehaviour
         }
 
         mesh.vertices = currentMeshVertices;
-
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
     }
